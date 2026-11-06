@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "envy-crypto-workbench"
+version = "0.1.0"
+description = "ENVY Cryptography Workbench: offline encoding, classical ciphers and analysis in a native app window"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+  "PyQt6>=6.7,<7",
+]
+
+[project.scripts]
+envy-crypto = "envy_crypto.cli:main"
+
+[project.gui-scripts]
+envy-crypto-gui = "envy_crypto.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["envy_crypto*"]
