@@ -40,6 +40,34 @@ class OperationTest(unittest.TestCase):
     def test_reverse_handles_unicode(self):
         self.assertEqual(core.operation("reverse", "café".encode()), "éfac".encode())
 
+    def test_vigenere_known_vector(self):
+        # The classic ATTACKATDAWN / LEMON -> LXFOPVEFRNHR vector.
+        self.assertEqual(core.operation("vigenere-encode", b"ATTACKATDAWN", key="LEMON"), b"LXFOPVEFRNHR")
+        self.assertEqual(core.operation("vigenere-decode", b"LXFOPVEFRNHR", key="LEMON"), b"ATTACKATDAWN")
+
+    def test_vigenere_round_trip_preserves_case_and_punctuation(self):
+        msg = "Meet me at Dawn, by the River!".encode()
+        enc = core.operation("vigenere-encode", msg, key="Falcon")
+        self.assertNotEqual(enc, msg)
+        self.assertEqual(core.operation("vigenere-decode", enc, key="Falcon"), msg)
+        # Non-letters are passed through, not shifted.
+        self.assertIn(b",", enc); self.assertIn(b"!", enc)
+
+    def test_vigenere_requires_letter_key(self):
+        for bad in ("", "  ", "key1", "clé"):
+            with self.assertRaises(core.CryptoError):
+                core.operation("vigenere-encode", b"hello", key=bad)
+
+    def test_recipe_carries_vigenere_key(self):
+        steps = [{"op": "vigenere-encode", "key": "LEMON"}, {"op": "base64-encode"}]
+        out, trace = core.run_steps(b"ATTACKATDAWN", steps)
+        self.assertEqual(core.operation("base64-decode", out), b"LXFOPVEFRNHR")
+        self.assertEqual(len(trace), 2)
+        with self.assertRaises(core.CryptoError):
+            core.run_steps(b"x", [{"op": "vigenere-encode"}])            # missing key
+        with self.assertRaises(core.CryptoError):
+            core.run_steps(b"x", [{"op": "vigenere-encode", "key": "LEMON", "shift": 1}])  # stray param
+
     def test_rot_shift_bounds(self):
         with self.assertRaises(core.CryptoError):
             core.operation("rot", b"x", 99)
