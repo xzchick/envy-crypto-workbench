@@ -24,14 +24,16 @@ MAX_OUTPUT = 4 * 1024 * 1024
 MAX_STEPS = 16
 OPERATIONS = ("base64-encode", "base64-decode", "base32-encode", "base32-decode",
               "hex-encode", "hex-decode", "url-encode", "url-decode",
-              "rot", "rot47", "atbash", "reverse")
+              "rot", "rot47", "atbash", "vigenere-encode", "vigenere-decode", "reverse")
 CAPTIONS = {
     "base64-encode": "Encode as Base64", "base64-decode": "Decode Base64",
     "base32-encode": "Encode as Base32", "base32-decode": "Decode Base32",
     "hex-encode": "Encode as hex", "hex-decode": "Decode hex",
     "url-encode": "URL-encode (percent)", "url-decode": "URL-decode (percent)",
     "rot": "Shift letters (ROT)", "rot47": "Shift printable (ROT47)",
-    "atbash": "Reverse alphabet (Atbash)", "reverse": "Reverse characters",
+    "atbash": "Reverse alphabet (Atbash)",
+    "vigenere-encode": "Vigenère encipher (keyword)", "vigenere-decode": "Vigenère decipher (keyword)",
+    "reverse": "Reverse characters",
 }
 
 
@@ -43,7 +45,26 @@ def _digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def operation(action: str, data: bytes, shift: int = 13) -> bytes:
+def _vigenere(data: bytes, key: str, decode: bool = False) -> bytes:
+    """Classic Vigenère over A–Z/a–z; case preserved, non-letters passed through
+    without consuming the key. The key must be ASCII letters."""
+    key = (key or "").strip()
+    if not key or not key.isascii() or not key.isalpha():
+        raise CryptoError("Vigenère needs a key of ASCII letters (A–Z)")
+    shifts = [ord(k.lower()) - ord("a") for k in key]
+    out, i = [], 0
+    for char in data.decode("utf-8"):
+        start = ord("A") if "A" <= char <= "Z" else ord("a") if "a" <= char <= "z" else None
+        if start is None:
+            out.append(char)
+            continue
+        s = shifts[i % len(shifts)]
+        out.append(chr(start + (ord(char) - start + (-s if decode else s)) % 26))
+        i += 1
+    return "".join(out).encode("utf-8")
+
+
+def operation(action: str, data: bytes, shift: int = 13, key: str = "") -> bytes:
     """Apply one reversible operation to bytes. Raises CryptoError on bad input."""
     if action not in OPERATIONS:
         raise CryptoError("Unknown operation")
@@ -67,6 +88,10 @@ def operation(action: str, data: bytes, shift: int = 13) -> bytes:
         elif action == "rot47":
             # ROT47 shifts printable ASCII (33–126) by 47; it is its own inverse.
             result = bytes(33 + (b - 33 + 47) % 94 if 33 <= b <= 126 else b for b in data)
+        elif action == "vigenere-encode":
+            result = _vigenere(data, key, decode=False)
+        elif action == "vigenere-decode":
+            result = _vigenere(data, key, decode=True)
         elif action == "reverse":
             result = data.decode("utf-8")[::-1].encode("utf-8")
         else:
@@ -126,13 +151,22 @@ def validate_recipe(recipe: dict) -> dict:
     for step in steps:
         if not isinstance(step, dict) or step.get("op") not in OPERATIONS:
             raise CryptoError("Invalid recipe operation")
-        allowed = {"op", "shift"} if step["op"] == "rot" else {"op"}
+        if step["op"] == "rot":
+            allowed = {"op", "shift"}
+        elif step["op"].startswith("vigenere-"):
+            allowed = {"op", "key"}
+        else:
+            allowed = {"op"}
         if not set(step) <= allowed:
             raise CryptoError("Unknown recipe step parameter")
         if step["op"] == "rot":
             shift = step.get("shift", 13)
             if isinstance(shift, bool) or not isinstance(shift, int) or not -25 <= shift <= 25:
                 raise CryptoError("Recipe ROT shift must be between -25 and 25")
+        if step["op"].startswith("vigenere-"):
+            key = step.get("key", "")
+            if not isinstance(key, str) or not key.strip() or not key.strip().isascii() or not key.strip().isalpha():
+                raise CryptoError("Recipe Vigenère key must be ASCII letters")
     return recipe
 
 
@@ -141,7 +175,7 @@ def run_steps(data: bytes, steps: list) -> tuple[bytes, list]:
     validate_recipe({"schema": 1, "steps": steps})
     trace = []
     for step in steps:
-        data = operation(step["op"], data, step.get("shift", 13))
+        data = operation(step["op"], data, step.get("shift", 13), step.get("key", ""))
         trace.append(dict(step, output_bytes=len(data), output_sha256=_digest(data)))
     return data, trace
 
@@ -181,9 +215,9 @@ def write_new_file(path: str | Path, data: bytes) -> Path:
     return path
 
 
-def transform_file(action: str, source: str | Path, destination: str | Path, shift: int = 13) -> dict:
+def transform_file(action: str, source: str | Path, destination: str | Path, shift: int = 13, key: str = "") -> dict:
     data = read_regular(source)
-    result = operation(action, data, shift)
+    result = operation(action, data, shift, key)
     write_new_file(destination, result)
     return {"output": str(Path(destination).expanduser()), "operation": action,
             "bytes": len(result), "modern_encryption": False, "source_preserved": True}
