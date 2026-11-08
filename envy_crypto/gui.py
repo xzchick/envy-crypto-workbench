@@ -185,6 +185,8 @@ def _build():
             g.addWidget(self._tag("ROT BRUTE FORCE (ALL 26 SHIFTS)"))
             self.brute = QPlainTextEdit(); self.brute.setObjectName("mono"); self.brute.setReadOnly(True)
             g.addWidget(self.brute, 1)
+            copy_a = QPushButton("Copy analysis"); copy_a.setObjectName("go"); copy_a.clicked.connect(self._copy_analysis)
+            g.addWidget(copy_a)
             note = QLabel("Frequency and entropy describe text; they never prove encryption or wrongdoing.")
             note.setObjectName("foot"); note.setWordWrap(True); g.addWidget(note)
             return tab
@@ -215,6 +217,11 @@ def _build():
         def _copy(self):
             QGuiApplication.clipboard().setText(self.out.toPlainText())
             self.status.setText("Output copied to the clipboard."); self.status.setStyleSheet(f"#status{{color:{CYAN};}}")
+
+        def _copy_analysis(self):
+            text = self.stats.text() + "\n\n" + self.brute.toPlainText()
+            QGuiApplication.clipboard().setText(text.strip())
+            self.status.setText("Analysis copied to the clipboard."); self.status.setStyleSheet(f"#status{{color:{CYAN};}}")
 
         def _recompute(self):
             data = self.inp.toPlainText().encode("utf-8")
