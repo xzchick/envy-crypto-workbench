@@ -30,6 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
     recipe.add_argument("--recipe", required=True, help="a schema-1 recipe JSON file")
     recipe.add_argument("source")
     recipe.add_argument("destination")
+    recipe.add_argument("--trace", action="store_true",
+                        help="print each step's output size and SHA-256 as the recipe runs")
 
     analyze = commands.add_parser("analyze", help="print read-only frequency and entropy analysis")
     analyze.add_argument("source")
@@ -44,6 +46,12 @@ def _run(args) -> int:
         print(f"{args.op}: wrote {result['bytes']} bytes to {result['output']}")
     elif args.command == "recipe":
         result = run_recipe_file(args.source, args.recipe, args.destination)
+        if args.trace:
+            for i, step in enumerate(result["steps"], 1):
+                extra = f" shift={step['shift']}" if "shift" in step else (
+                    f" key={step['key']}" if "key" in step else "")
+                print(f"  {i}. {step['op']}{extra} → {step['output_bytes']} bytes  "
+                      f"sha256 {step['output_sha256'][:16]}…")
         print(f"recipe ({len(result['steps'])} steps): wrote {result['output']}")
     else:  # analyze
         report = analyze_bytes(read_regular(args.source))

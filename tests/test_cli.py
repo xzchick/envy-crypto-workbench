@@ -53,6 +53,30 @@ class CLITest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             cli.build_parser().parse_args(["enigma"])
 
+    def test_recipe_trace_prints_each_step(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "in.txt"; src.write_bytes(b"Hello")
+            rec = Path(tmp) / "r.json"
+            rec.write_text(json.dumps({"schema": 1,
+                                       "steps": [{"op": "rot", "shift": 13}, {"op": "base64-encode"}]}))
+            dst = Path(tmp) / "out.txt"
+            code, out, _ = self.invoke("recipe", "--recipe", rec, src, dst, "--trace")
+            self.assertEqual(code, 0)
+            self.assertIn("1. rot shift=13", out)
+            self.assertIn("2. base64-encode", out)
+            self.assertIn("sha256", out)
+            self.assertEqual(dst.read_bytes(), b"VXJ5eWI=")       # rot13 "Hello"->"Uryyb"->base64
+
+    def test_recipe_without_trace_is_quiet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "in.txt"; src.write_bytes(b"Hello")
+            rec = Path(tmp) / "r.json"
+            rec.write_text(json.dumps({"schema": 1, "steps": [{"op": "base64-encode"}]}))
+            dst = Path(tmp) / "out.txt"
+            code, out, _ = self.invoke("recipe", "--recipe", rec, src, dst)
+            self.assertEqual(code, 0)
+            self.assertNotIn("sha256", out)
+
 
 if __name__ == "__main__":
     unittest.main()
