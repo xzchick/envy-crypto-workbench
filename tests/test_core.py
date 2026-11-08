@@ -24,6 +24,19 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(core.operation("atbash", b"Attack at dawn"), b"Zggzxp zg wzdm")
         self.assertEqual(core.operation("atbash", core.operation("atbash", b"Secrets")), b"Secrets")
 
+    def test_base32_round_trip(self):
+        data = b"ENVY cryptography workbench \x00\x01"
+        self.assertEqual(core.operation("base32-decode", core.operation("base32-encode", data)), data)
+
+    def test_url_encode_round_trip_and_vector(self):
+        self.assertEqual(core.operation("url-encode", b"a b&c=/?"), b"a%20b%26c%3D%2F%3F")
+        data = "key = café/2".encode("utf-8")
+        self.assertEqual(core.operation("url-decode", core.operation("url-encode", data)), data)
+
+    def test_rot47_is_its_own_inverse_and_vector(self):
+        self.assertEqual(core.operation("rot47", b"Hello, World!"), b"w6==@[ (@C=5P")
+        self.assertEqual(core.operation("rot47", core.operation("rot47", b"Secrets 123")), b"Secrets 123")
+
     def test_reverse_handles_unicode(self):
         self.assertEqual(core.operation("reverse", "café".encode()), "éfac".encode())
 

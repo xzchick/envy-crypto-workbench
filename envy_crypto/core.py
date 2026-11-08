@@ -16,18 +16,22 @@ import json
 import math
 import os
 import stat
+import urllib.parse
 from pathlib import Path
 
 MAX_INPUT = 1024 * 1024
 MAX_OUTPUT = 4 * 1024 * 1024
 MAX_STEPS = 16
-OPERATIONS = ("base64-encode", "base64-decode", "hex-encode", "hex-decode",
-              "rot", "atbash", "reverse")
+OPERATIONS = ("base64-encode", "base64-decode", "base32-encode", "base32-decode",
+              "hex-encode", "hex-decode", "url-encode", "url-decode",
+              "rot", "rot47", "atbash", "reverse")
 CAPTIONS = {
     "base64-encode": "Encode as Base64", "base64-decode": "Decode Base64",
+    "base32-encode": "Encode as Base32", "base32-decode": "Decode Base32",
     "hex-encode": "Encode as hex", "hex-decode": "Decode hex",
-    "rot": "Shift letters (ROT)", "atbash": "Reverse alphabet (Atbash)",
-    "reverse": "Reverse characters",
+    "url-encode": "URL-encode (percent)", "url-decode": "URL-decode (percent)",
+    "rot": "Shift letters (ROT)", "rot47": "Shift printable (ROT47)",
+    "atbash": "Reverse alphabet (Atbash)", "reverse": "Reverse characters",
 }
 
 
@@ -48,10 +52,21 @@ def operation(action: str, data: bytes, shift: int = 13) -> bytes:
             result = base64.b64encode(data)
         elif action == "base64-decode":
             result = base64.b64decode(b"".join(data.split()), validate=True)
+        elif action == "base32-encode":
+            result = base64.b32encode(data)
+        elif action == "base32-decode":
+            result = base64.b32decode(b"".join(data.split()), casefold=True)
         elif action == "hex-encode":
             result = data.hex().encode("ascii")
         elif action == "hex-decode":
             result = bytes.fromhex(data.decode("ascii"))
+        elif action == "url-encode":
+            result = urllib.parse.quote_from_bytes(data, safe="").encode("ascii")
+        elif action == "url-decode":
+            result = urllib.parse.unquote_to_bytes(data.decode("ascii"))
+        elif action == "rot47":
+            # ROT47 shifts printable ASCII (33–126) by 47; it is its own inverse.
+            result = bytes(33 + (b - 33 + 47) % 94 if 33 <= b <= 126 else b for b in data)
         elif action == "reverse":
             result = data.decode("utf-8")[::-1].encode("utf-8")
         else:
