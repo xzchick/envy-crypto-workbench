@@ -23,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--op", required=True, choices=OPERATIONS)
     run.add_argument("--shift", type=int, default=13, help="ROT shift, -25..25")
     run.add_argument("--key", default="", help="keyword for vigenere-encode/decode (ASCII letters)")
+    run.add_argument("--rails", type=int, default=3, help="rail count for railfence-encode/decode (2-64)")
     run.add_argument("source")
     run.add_argument("destination", help="a new file; it is never overwritten")
 
@@ -42,7 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
 def _run(args) -> int:
     from .core import read_regular, analyze as analyze_bytes
     if args.command == "run":
-        result = transform_file(args.op, args.source, args.destination, args.shift, args.key)
+        result = transform_file(args.op, args.source, args.destination, args.shift, args.key, args.rails)
         print(f"{args.op}: wrote {result['bytes']} bytes to {result['output']}")
     elif args.command == "recipe":
         result = run_recipe_file(args.source, args.recipe, args.destination)

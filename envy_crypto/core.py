@@ -24,7 +24,8 @@ MAX_OUTPUT = 4 * 1024 * 1024
 MAX_STEPS = 16
 OPERATIONS = ("base64-encode", "base64-decode", "base32-encode", "base32-decode",
               "hex-encode", "hex-decode", "url-encode", "url-decode",
-              "rot", "rot47", "atbash", "vigenere-encode", "vigenere-decode", "reverse")
+              "rot", "rot47", "atbash", "vigenere-encode", "vigenere-decode",
+              "railfence-encode", "railfence-decode", "reverse")
 CAPTIONS = {
     "base64-encode": "Encode as Base64", "base64-decode": "Decode Base64",
     "base32-encode": "Encode as Base32", "base32-decode": "Decode Base32",
@@ -33,8 +34,10 @@ CAPTIONS = {
     "rot": "Shift letters (ROT)", "rot47": "Shift printable (ROT47)",
     "atbash": "Reverse alphabet (Atbash)",
     "vigenere-encode": "Vigenère encipher (keyword)", "vigenere-decode": "Vigenère decipher (keyword)",
+    "railfence-encode": "Rail-fence transpose (rails)", "railfence-decode": "Rail-fence untranspose (rails)",
     "reverse": "Reverse characters",
 }
+MIN_RAILS, MAX_RAILS = 2, 64
 
 
 class CryptoError(Exception):
@@ -64,7 +67,42 @@ def _vigenere(data: bytes, key: str, decode: bool = False) -> bytes:
     return "".join(out).encode("utf-8")
 
 
-def operation(action: str, data: bytes, shift: int = 13, key: str = "") -> bytes:
+def _rail_pattern(length: int, rails: int):
+    """The rail index each character lands on, zig-zagging top to bottom and back."""
+    pattern, row, step = [], 0, 1
+    for _ in range(length):
+        pattern.append(row)
+        if row == 0:
+            step = 1
+        elif row == rails - 1:
+            step = -1
+        row += step
+    return pattern
+
+
+def _railfence(data: bytes, rails: int, decode: bool) -> bytes:
+    if type(rails) is bool or not isinstance(rails, int) or not MIN_RAILS <= rails <= MAX_RAILS:
+        raise CryptoError(f"Rail-fence rails must be a whole number from {MIN_RAILS} to {MAX_RAILS}")
+    text = data.decode("utf-8")
+    pattern = _rail_pattern(len(text), rails)
+    if not decode:
+        fence = ["" for _ in range(rails)]
+        for ch, row in zip(text, pattern):
+            fence[row] += ch
+        return "".join(fence).encode("utf-8")
+    # decode: slice the ciphertext back into rails by their lengths, then follow the zig-zag.
+    counts = [pattern.count(r) for r in range(rails)]
+    pieces, pos = [], 0
+    for count in counts:
+        pieces.append(list(text[pos:pos + count])); pos += count
+    cursor = [0] * rails
+    out = []
+    for row in pattern:
+        out.append(pieces[row][cursor[row]]); cursor[row] += 1
+    return "".join(out).encode("utf-8")
+
+
+def operation(action: str, data: bytes, shift: int = 13, key: str = "", rails: int = 3) -> bytes:
     """Apply one reversible operation to bytes. Raises CryptoError on bad input."""
     if action not in OPERATIONS:
         raise CryptoError("Unknown operation")
@@ -92,6 +130,10 @@ def operation(action: str, data: bytes, shift: int = 13, key: str = "") -> bytes
             result = _vigenere(data, key, decode=False)
         elif action == "vigenere-decode":
             result = _vigenere(data, key, decode=True)
+        elif action == "railfence-encode":
+            result = _railfence(data, rails, decode=False)
+        elif action == "railfence-decode":
+            result = _railfence(data, rails, decode=True)
         elif action == "reverse":
             result = data.decode("utf-8")[::-1].encode("utf-8")
         else:
@@ -155,6 +197,8 @@ def validate_recipe(recipe: dict) -> dict:
             allowed = {"op", "shift"}
         elif step["op"].startswith("vigenere-"):
             allowed = {"op", "key"}
+        elif step["op"].startswith("railfence-"):
+            allowed = {"op", "rails"}
         else:
             allowed = {"op"}
         if not set(step) <= allowed:
@@ -167,6 +211,10 @@ def validate_recipe(recipe: dict) -> dict:
             key = step.get("key", "")
             if not isinstance(key, str) or not key.strip() or not key.strip().isascii() or not key.strip().isalpha():
                 raise CryptoError("Recipe Vigenère key must be ASCII letters")
+        if step["op"].startswith("railfence-"):
+            rails = step.get("rails", 3)
+            if isinstance(rails, bool) or not isinstance(rails, int) or not MIN_RAILS <= rails <= MAX_RAILS:
+                raise CryptoError(f"Recipe rail-fence rails must be between {MIN_RAILS} and {MAX_RAILS}")
     return recipe
 
 
@@ -175,7 +223,7 @@ def run_steps(data: bytes, steps: list) -> tuple[bytes, list]:
     validate_recipe({"schema": 1, "steps": steps})
     trace = []
     for step in steps:
-        data = operation(step["op"], data, step.get("shift", 13), step.get("key", ""))
+        data = operation(step["op"], data, step.get("shift", 13), step.get("key", ""), step.get("rails", 3))
         trace.append(dict(step, output_bytes=len(data), output_sha256=_digest(data)))
     return data, trace
 
@@ -215,9 +263,10 @@ def write_new_file(path: str | Path, data: bytes) -> Path:
     return path
 
 
-def transform_file(action: str, source: str | Path, destination: str | Path, shift: int = 13, key: str = "") -> dict:
+def transform_file(action: str, source: str | Path, destination: str | Path,
+                   shift: int = 13, key: str = "", rails: int = 3) -> dict:
     data = read_regular(source)
-    result = operation(action, data, shift, key)
+    result = operation(action, data, shift, key, rails)
     write_new_file(destination, result)
     return {"output": str(Path(destination).expanduser()), "operation": action,
             "bytes": len(result), "modern_encryption": False, "source_preserved": True}
