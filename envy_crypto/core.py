@@ -23,12 +23,14 @@ MAX_INPUT = 1024 * 1024
 MAX_OUTPUT = 4 * 1024 * 1024
 MAX_STEPS = 16
 OPERATIONS = ("base64-encode", "base64-decode", "base32-encode", "base32-decode",
+              "base85-encode", "base85-decode",
               "hex-encode", "hex-decode", "url-encode", "url-decode",
               "rot", "rot47", "atbash", "vigenere-encode", "vigenere-decode",
               "railfence-encode", "railfence-decode", "reverse")
 CAPTIONS = {
     "base64-encode": "Encode as Base64", "base64-decode": "Decode Base64",
     "base32-encode": "Encode as Base32", "base32-decode": "Decode Base32",
+    "base85-encode": "Encode as Base85 (Ascii85)", "base85-decode": "Decode Base85 (Ascii85)",
     "hex-encode": "Encode as hex", "hex-decode": "Decode hex",
     "url-encode": "URL-encode (percent)", "url-decode": "URL-decode (percent)",
     "rot": "Shift letters (ROT)", "rot47": "Shift printable (ROT47)",
@@ -115,6 +117,10 @@ def operation(action: str, data: bytes, shift: int = 13, key: str = "", rails: i
             result = base64.b32encode(data)
         elif action == "base32-decode":
             result = base64.b32decode(b"".join(data.split()), casefold=True)
+        elif action == "base85-encode":
+            result = base64.a85encode(data)
+        elif action == "base85-decode":
+            result = base64.a85decode(b"".join(data.split()))
         elif action == "hex-encode":
             result = data.hex().encode("ascii")
         elif action == "hex-decode":

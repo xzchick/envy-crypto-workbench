@@ -28,6 +28,20 @@ class OperationTest(unittest.TestCase):
         data = b"ENVY cryptography workbench \x00\x01"
         self.assertEqual(core.operation("base32-decode", core.operation("base32-encode", data)), data)
 
+    def test_base85_round_trip(self):
+        for payload in (b"", b"Hello", b"\x00\x01\x02\xff binary \x10", b"A" * 100):
+            enc = core.operation("base85-encode", payload)
+            self.assertEqual(core.operation("base85-decode", enc), payload)
+
+    def test_base85_decode_tolerates_whitespace(self):
+        enc = core.operation("base85-encode", b"spread across lines")
+        spaced = b"  " + enc[:4] + b"\n" + enc[4:] + b"  "
+        self.assertEqual(core.operation("base85-decode", spaced), b"spread across lines")
+
+    def test_base85_in_recipe(self):
+        out, _ = core.run_steps(b"payload", [{"op": "base85-encode"}, {"op": "base85-decode"}])
+        self.assertEqual(out, b"payload")
+
     def test_url_encode_round_trip_and_vector(self):
         self.assertEqual(core.operation("url-encode", b"a b&c=/?"), b"a%20b%26c%3D%2F%3F")
         data = "key = café/2".encode("utf-8")
