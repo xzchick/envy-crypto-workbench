@@ -26,7 +26,7 @@ Base64 and hex, ROT and Atbash, chained recipes, and frequency analysis with a R
 </p>
 
 <p align="center">
-  <img src="assets/readme/window.png" width="88%" alt="The workbench window: input text, operation buttons for Base64, hex, ROT, Atbash and reverse, a recipe list and the output, in the ENVY neon theme" />
+  <img src="assets/readme/demo.gif" width="88%" alt="The workbench window: input text, operation buttons for Base64, hex, ROT, Atbash and reverse, a recipe list and the output, in the ENVY neon theme" />
 </p>
 
 <p align="center"><sub>A real native window — not a browser view. The title pulses, the stars twinkle, and a light travels the accent bar.</sub></p>
