@@ -68,6 +68,33 @@ class OperationTest(unittest.TestCase):
         with self.assertRaises(core.CryptoError):
             core.run_steps(b"x", [{"op": "vigenere-encode", "key": "LEMON", "shift": 1}])  # stray param
 
+    def test_railfence_known_vector(self):
+        # The classic WEAREDISCOVEREDFLEEATONCE / 3 rails example.
+        self.assertEqual(core.operation("railfence-encode", b"WEAREDISCOVEREDFLEEATONCE", rails=3),
+                         b"WECRLTEERDSOEEFEAOCAIVDEN")
+        self.assertEqual(core.operation("railfence-decode", b"WECRLTEERDSOEEFEAOCAIVDEN", rails=3),
+                         b"WEAREDISCOVEREDFLEEATONCE")
+
+    def test_railfence_round_trip_various_rails(self):
+        msg = "The quick brown fox, jumps! 123".encode()
+        for rails in (2, 4, 7):
+            enc = core.operation("railfence-encode", msg, rails=rails)
+            self.assertEqual(core.operation("railfence-decode", enc, rails=rails), msg)
+
+    def test_railfence_rails_bounds(self):
+        for bad in (1, 0, 65, True):
+            with self.assertRaises(core.CryptoError):
+                core.operation("railfence-encode", b"abc", rails=bad)
+
+    def test_recipe_carries_rails(self):
+        steps = [{"op": "railfence-encode", "rails": 3}, {"op": "base64-encode"}]
+        out, _ = core.run_steps(b"WEAREDISCOVEREDFLEEATONCE", steps)
+        self.assertEqual(core.operation("base64-decode", out), b"WECRLTEERDSOEEFEAOCAIVDEN")
+        with self.assertRaises(core.CryptoError):
+            core.run_steps(b"x", [{"op": "railfence-encode", "rails": 1}])
+        with self.assertRaises(core.CryptoError):
+            core.run_steps(b"x", [{"op": "railfence-encode", "key": "x"}])   # stray param
+
     def test_rot_shift_bounds(self):
         with self.assertRaises(core.CryptoError):
             core.operation("rot", b"x", 99)
