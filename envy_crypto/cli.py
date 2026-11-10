@@ -37,11 +37,16 @@ def build_parser() -> argparse.ArgumentParser:
     analyze = commands.add_parser("analyze", help="print read-only frequency and entropy analysis")
     analyze.add_argument("source")
     analyze.add_argument("--full", action="store_true", help="include the full byte histogram")
+
+    diff = commands.add_parser("diff", help="show a diff between two files (e.g. input vs output)")
+    diff.add_argument("before")
+    diff.add_argument("after")
+    diff.add_argument("--json", action="store_true", help="emit the full diff as JSON")
     return root
 
 
 def _run(args) -> int:
-    from .core import read_regular, analyze as analyze_bytes
+    from .core import read_regular, analyze as analyze_bytes, diff as diff_bytes
     if args.command == "run":
         result = transform_file(args.op, args.source, args.destination, args.shift, args.key, args.rails)
         print(f"{args.op}: wrote {result['bytes']} bytes to {result['output']}")
@@ -54,12 +59,24 @@ def _run(args) -> int:
                 print(f"  {i}. {step['op']}{extra} → {step['output_bytes']} bytes  "
                       f"sha256 {step['output_sha256'][:16]}…")
         print(f"recipe ({len(result['steps'])} steps): wrote {result['output']}")
-    else:  # analyze
+    elif args.command == "analyze":
         report = analyze_bytes(read_regular(args.source))
         if not args.full:
             report.pop("byte_frequency", None)
             report["rot_candidates"] = report["rot_candidates"][:3]
         print(json.dumps(report, indent=2))
+    else:  # diff
+        d = diff_bytes(read_regular(args.before), read_regular(args.after))
+        if args.json:
+            print(json.dumps(d, indent=2))
+        elif d["equal"]:
+            print("identical")
+        elif d["text"]:
+            print(d["unified"], end="")
+            print(f"similarity {d['similarity']}")
+        else:
+            print(f"binary: {d['before_bytes']} → {d['after_bytes']} bytes, "
+                  f"shared prefix {d['common_prefix_bytes']}, suffix {d['common_suffix_bytes']}")
     return 0
 
 
