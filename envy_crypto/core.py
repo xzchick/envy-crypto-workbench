@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import binascii
 from collections import Counter
+import difflib
 import hashlib
 import json
 import math
@@ -187,6 +188,43 @@ def analyze(data: bytes) -> dict:
         "interpretation": "Encoding and classical-cipher learning only. Entropy and frequency do "
                           "not prove encryption, randomness, identity, or wrongdoing.",
     }
+
+
+def diff(before: bytes, after: bytes, context: int = 3) -> dict:
+    """A read-only diff between an input and an output — e.g. text before and after an
+    operation. No crypto.
+
+    When both sides decode as UTF-8 text, returns a unified line diff and a 0–1 similarity
+    ratio. For binary data it returns byte-level facts instead (lengths, whether equal, and
+    the length of the shared leading and trailing runs). This only describes the change; it
+    makes no claim about security.
+    """
+    equal = before == after
+    result = {"equal": equal, "before_bytes": len(before), "after_bytes": len(after)}
+    try:
+        b_text, a_text = before.decode("utf-8"), after.decode("utf-8")
+    except UnicodeDecodeError:
+        prefix = 0
+        for x, y in zip(before, after):
+            if x != y:
+                break
+            prefix += 1
+        suffix = 0
+        for x, y in zip(reversed(before), reversed(after)):
+            if x != y:
+                break
+            suffix += 1
+        suffix = min(suffix, min(len(before), len(after)) - prefix)
+        result.update(text=False, common_prefix_bytes=prefix, common_suffix_bytes=max(suffix, 0))
+        return result
+    unified = "".join(difflib.unified_diff(
+        b_text.splitlines(keepends=True), a_text.splitlines(keepends=True),
+        fromfile="input", tofile="output", n=max(0, context)))
+    if unified and not unified.endswith("\n"):
+        unified += "\n"
+    result.update(text=True, unified=unified,
+                  similarity=round(difflib.SequenceMatcher(None, b_text, a_text).ratio(), 4))
+    return result
 
 
 def validate_recipe(recipe: dict) -> dict:

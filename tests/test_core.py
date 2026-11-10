@@ -138,6 +138,35 @@ class AnalyzeTest(unittest.TestCase):
         self.assertEqual(report["entropy_bits_per_byte"], 0)
 
 
+class DiffTest(unittest.TestCase):
+    def test_equal(self):
+        d = core.diff(b"same", b"same")
+        self.assertTrue(d["equal"])
+        self.assertTrue(d["text"])
+        self.assertEqual(d["unified"], "")
+        self.assertEqual(d["similarity"], 1.0)
+
+    def test_text_unified_diff(self):
+        d = core.diff(b"alpha\nbeta\n", b"alpha\nBETA\n")
+        self.assertFalse(d["equal"])
+        self.assertTrue(d["text"])
+        self.assertIn("-beta", d["unified"])
+        self.assertIn("+BETA", d["unified"])
+        self.assertIn("--- input", d["unified"])
+        self.assertIn("+++ output", d["unified"])
+        self.assertLess(d["similarity"], 1.0)
+
+    def test_binary_byte_facts(self):
+        before = b"\x00\x01\x02\xff\xfe"
+        after = b"\x00\x01\x99\xff\xfe"      # one middle byte differs; \xff is invalid UTF-8
+        d = core.diff(before, after)
+        self.assertFalse(d["text"])
+        self.assertFalse(d["equal"])
+        self.assertEqual(d["common_prefix_bytes"], 2)
+        self.assertEqual(d["common_suffix_bytes"], 2)
+        self.assertEqual(d["before_bytes"], 5)
+
+
 class RecipeTest(unittest.TestCase):
     def setUp(self):
         self.dir = Path(tempfile.mkdtemp(prefix="envy-crypto-"))
