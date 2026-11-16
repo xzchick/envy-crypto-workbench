@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "envy-crypto-workbench"
-version = "0.2.1"
+version = "0.2.2"
 description = "ENVY Cryptography Workbench: offline encoding, classical ciphers and analysis in a native app window"
 readme = "README.md"
 requires-python = ">=3.10"
